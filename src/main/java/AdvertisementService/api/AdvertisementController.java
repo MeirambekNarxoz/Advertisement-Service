@@ -45,6 +45,7 @@ public class AdvertisementController {
     }
 
     // Update
+//    Test
     @PutMapping("/{id}")
     public ResponseEntity<AdvertisementResponse> updateAdvertisement(
             @PathVariable UUID id,
