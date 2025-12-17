@@ -37,7 +37,7 @@ public class AdvertisementController {
         request.setDescription(description);
         request.setPrice(price);
 
-        AdvertisementResponse created = service.createAdvertisement(request, userId);
+        AdvertisementResponse created = service.createAdvertisement(request);
 
         UUID adId = created.getId();
         AdvertisementResponse withThumb = service

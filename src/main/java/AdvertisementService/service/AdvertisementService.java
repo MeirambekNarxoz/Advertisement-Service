@@ -10,6 +10,7 @@ import AdvertisementService.mapper.AdvertisementMapper;
 import AdvertisementService.model.Advertisement;
 import AdvertisementService.model.AdvertisementStatus;
 import AdvertisementService.repository.AdvertisementRepository;
+import AdvertisementService.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,18 +36,22 @@ public class AdvertisementService {
 
     // Create
     @Transactional
-    public AdvertisementResponse createAdvertisement(AdvertisementRequest request, UUID userId) {
+    public AdvertisementResponse createAdvertisement(AdvertisementRequest request) {
+        UUID userId = SecurityUtils.getCurrentUserId();
+
         Advertisement ad = mapper.toEntity(request);
         ad.setUserId(userId);
         ad.setStatus(AdvertisementStatus.ACTIVE);
 
         Advertisement saved = repository.save(ad);
 
-        advertisementEventPublisher.publishAdvertisementCreated(new AdvertisementCreatedEvent(
-                saved.getId(),
-                saved.getUserId(),
-                Instant.now()
-        ));
+        advertisementEventPublisher.publishAdvertisementCreated(
+                new AdvertisementCreatedEvent(
+                        saved.getId(),
+                        saved.getUserId(),
+                        Instant.now()
+                )
+        );
 
         AdvertisementResponse resp = mapper.toResponse(saved);
         cacheService.save(keyById(saved.getId()), resp);
@@ -54,6 +59,7 @@ public class AdvertisementService {
 
         return resp;
     }
+
 
     // Read all
     public List<AdvertisementResponse> getAllAdvertisements() {
