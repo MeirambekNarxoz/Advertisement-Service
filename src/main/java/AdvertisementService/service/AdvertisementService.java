@@ -4,13 +4,13 @@ import AdvertisementService.dto.AdvertisementRequest;
 import AdvertisementService.dto.AdvertisementResponse;
 import AdvertisementService.event.AdvertisementCreatedEvent;
 import AdvertisementService.event.AdvertisementDeletedEvent;
+import AdvertisementService.event.AdvertisementEventPublisher;
 import AdvertisementService.event.AdvertisementUpdatedEvent;
 import AdvertisementService.mapper.AdvertisementMapper;
 import AdvertisementService.model.Advertisement;
 import AdvertisementService.model.AdvertisementStatus;
 import AdvertisementService.repository.AdvertisementRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -25,7 +25,7 @@ public class AdvertisementService {
 
     private final AdvertisementRepository repository;
     private final AdvertisementMapper mapper;
-    private final ApplicationEventPublisher eventPublisher;
+    private final AdvertisementEventPublisher advertisementEventPublisher;
     private final FileStorageService fileStorageService;
     private final CacheService cacheService;
 
@@ -42,7 +42,7 @@ public class AdvertisementService {
 
         Advertisement saved = repository.save(ad);
 
-        eventPublisher.publishEvent(new AdvertisementCreatedEvent(
+        advertisementEventPublisher.publishAdvertisementCreated(new AdvertisementCreatedEvent(
                 saved.getId(),
                 saved.getUserId(),
                 Instant.now()
@@ -91,7 +91,7 @@ public class AdvertisementService {
 
             Advertisement updated = repository.save(ad);
 
-            eventPublisher.publishEvent(new AdvertisementUpdatedEvent(
+            advertisementEventPublisher.publishAdvertisementUpdated(new AdvertisementUpdatedEvent(
                     updated.getId(),
                     Instant.now()
             ));
@@ -128,7 +128,7 @@ public class AdvertisementService {
             ad.setStatus(AdvertisementStatus.DELETED);
             repository.save(ad);
 
-            eventPublisher.publishEvent(new AdvertisementDeletedEvent(
+            advertisementEventPublisher.publishAdvertisementDeleted(new AdvertisementDeletedEvent(
                     ad.getId(),
                     Instant.now()
             ));

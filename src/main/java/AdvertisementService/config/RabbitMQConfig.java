@@ -12,10 +12,21 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     public static final String EXCHANGE_NAME = "advertisement.exchange";
+    public static final String QUEUE_NAME = "advertisements";
 
     @Bean
-    public TopicExchange advertisementExchange() {
-        return new TopicExchange(EXCHANGE_NAME);
+    public FanoutExchange advertisementExchange() {
+        return new FanoutExchange(EXCHANGE_NAME);
+    }
+
+    @Bean
+    public Queue advertisementsQueue() {
+        return new Queue(QUEUE_NAME, true);
+    }
+
+    @Bean
+    public Binding binding(Queue advertisementsQueue, FanoutExchange advertisementExchange) {
+        return BindingBuilder.bind(advertisementsQueue).to(advertisementExchange);
     }
 
     @Bean
