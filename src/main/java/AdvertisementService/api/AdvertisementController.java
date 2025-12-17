@@ -12,7 +12,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/advertisements")
+@RequestMapping("/api/v1/advertisements")
 @RequiredArgsConstructor
 public class AdvertisementController {
 

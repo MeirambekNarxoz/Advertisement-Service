@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # База данных для вашего Advertisement Service
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_DB: advertisement_db
+      POSTGRES_USER: advertisement
+      POSTGRES_PASSWORD: advertisement
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - task
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U advertisement"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # База данных для Keycloak (отдельная от основной)
+  db-keycloak:
+    image: postgres:16
+    container_name: db-keycloak
+    restart: always
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_keycloak_data:/var/lib/postgresql/data
+    networks:
+      - task
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Keycloak - система управления идентификацией и доступом
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.4
+    container_name: keycloak
+    command:
+      - start-dev
+      - --hostname-strict=false
+      - --http-port=8080
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db-keycloak:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: true
+    ports:
+      - "8082:8080"
+    depends_on:
+      db-keycloak:
+        condition: service_healthy
+    networks:
+      - task
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # RabbitMQ - брокер сообщений для событий
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"    # AMQP порт
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - task
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+# Определение сети для связи контейнеров
+networks:
+  task:
+    driver: bridge
+
+# Volumes для персистентного хранения данных
+volumes:
+  postgres_data:
+    driver: local
+  postgres_keycloak_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
