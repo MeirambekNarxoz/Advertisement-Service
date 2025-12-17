@@ -26,6 +26,7 @@ public class Advertisement implements Serializable {
     private Integer price;
 
     private String thumbnailUrl;
+    private String shortUrl;
 
     @Enumerated(EnumType.STRING)
     private AdvertisementStatus status = AdvertisementStatus.ACTIVE;

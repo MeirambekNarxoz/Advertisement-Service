@@ -19,6 +19,7 @@ public class AdvertisementResponse implements Serializable {
    private String description;
    private Integer price;
    private String thumbnailUrl;
+   private String shortUrl;
    private AdvertisementStatus status;
    private String userId;
 }
