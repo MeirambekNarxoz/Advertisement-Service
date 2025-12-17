@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -11,7 +12,7 @@ import java.util.UUID;
 @Getter
 @Setter
 @Table(name = "advertisements")
-public class Advertisement {
+public class Advertisement implements Serializable {
 
     @Id
     @GeneratedValue

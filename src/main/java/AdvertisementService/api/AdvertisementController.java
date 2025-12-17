@@ -6,6 +6,7 @@ import AdvertisementService.service.AdvertisementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Optional;
@@ -19,15 +20,32 @@ public class AdvertisementController {
     private final AdvertisementService service;
 
     // Create
-    @PostMapping
-    public ResponseEntity<AdvertisementResponse> createAdvertisement(
-            @RequestBody AdvertisementRequest request
+    @PostMapping(
+            consumes = {"multipart/form-data"},
+            produces = "application/json"
+    )
+    public ResponseEntity<AdvertisementResponse> createWithThumbnail(
+            @RequestParam String title,
+            @RequestParam String description,
+            @RequestParam Integer price,
+            @RequestParam("file") MultipartFile file
     ) {
-        UUID userId = UUID.randomUUID(); // временный userId
-        AdvertisementResponse response = service.createAdvertisement(request, userId);
-        return ResponseEntity.ok(response);
-    }
+        UUID userId = UUID.randomUUID(); // временно
 
+        AdvertisementRequest request = new AdvertisementRequest();
+        request.setTitle(title);
+        request.setDescription(description);
+        request.setPrice(price);
+
+        AdvertisementResponse created = service.createAdvertisement(request, userId);
+
+        UUID adId = created.getId();
+        AdvertisementResponse withThumb = service
+                .uploadThumbnail(adId, file, userId)
+                .orElse(created);
+
+        return ResponseEntity.ok(withThumb);
+    }
 
     // Read all
     @GetMapping
