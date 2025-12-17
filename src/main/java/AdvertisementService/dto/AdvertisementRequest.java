@@ -13,5 +13,4 @@
         private String title;
         private String description;
         private Integer price;
-        private String thumbnailUrl;
     }

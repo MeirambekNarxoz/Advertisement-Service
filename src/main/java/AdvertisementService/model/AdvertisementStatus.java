@@ -1,6 +1,8 @@
 package AdvertisementService.model;
 
-public enum AdvertisementStatus {
+import java.io.Serializable;
+
+public enum AdvertisementStatus implements Serializable {
     ACTIVE,
     DELETED
 }

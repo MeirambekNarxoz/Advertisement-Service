@@ -13,11 +13,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,7 +25,13 @@ public class AdvertisementService {
 
     private final AdvertisementRepository repository;
     private final AdvertisementMapper mapper;
-    private final ApplicationEventPublisher eventPublisher; // Добавлено
+    private final ApplicationEventPublisher eventPublisher;
+    private final FileStorageService fileStorageService;
+    private final CacheService cacheService;
+
+    private String keyById(UUID id) {
+        return "ad:" + id;
+    }
 
     // Create
     @Transactional
@@ -37,14 +42,17 @@ public class AdvertisementService {
 
         Advertisement saved = repository.save(ad);
 
-        // Публикация события после сохранения
         eventPublisher.publishEvent(new AdvertisementCreatedEvent(
                 saved.getId(),
                 saved.getUserId(),
                 Instant.now()
         ));
 
-        return mapper.toResponse(saved);
+        AdvertisementResponse resp = mapper.toResponse(saved);
+        cacheService.save(keyById(saved.getId()), resp);
+        cacheService.viewed(saved.getId());
+
+        return resp;
     }
 
     // Read all
@@ -57,7 +65,20 @@ public class AdvertisementService {
 
     // Read by ID
     public Optional<AdvertisementResponse> getAdvertisementById(UUID id) {
-        return repository.findById(id).map(mapper::toResponse);
+        String key = keyById(id);
+        AdvertisementResponse cached = (AdvertisementResponse) cacheService.get(key);
+
+        if (cached != null) {
+            cacheService.viewed(id);
+            return Optional.of(cached);
+        }
+
+        return repository.findById(id).map(ad -> {
+            AdvertisementResponse resp = mapper.toResponse(ad);
+            cacheService.save(key, resp);
+            cacheService.viewed(id);
+            return resp;
+        });
     }
 
     // Update
@@ -67,40 +88,75 @@ public class AdvertisementService {
             ad.setTitle(request.getTitle());
             ad.setDescription(request.getDescription());
             ad.setPrice(request.getPrice());
-            ad.setThumbnailUrl(request.getThumbnailUrl());
 
             Advertisement updated = repository.save(ad);
 
-            // Публикация события после обновления
             eventPublisher.publishEvent(new AdvertisementUpdatedEvent(
                     updated.getId(),
                     Instant.now()
             ));
 
-            return mapper.toResponse(updated);
+            AdvertisementResponse resp = mapper.toResponse(updated);
+            cacheService.save(keyById(id), resp);
+
+            return resp;
         });
     }
 
-    // Delete (Soft Delete)
+    // Upload thumbnail
+    public Optional<AdvertisementResponse> uploadThumbnail(UUID id, MultipartFile file, UUID currentUserId) {
+        return repository.findById(id).map(ad -> {
+            try {
+                String url = fileStorageService.uploadThumbnail(id, file);
+                ad.setThumbnailUrl(url);
+
+                Advertisement saved = repository.save(ad);
+                AdvertisementResponse resp = mapper.toResponse(saved);
+
+                cacheService.save(keyById(id), resp);
+                return resp;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to upload thumbnail", e);
+            }
+        });
+    }
+
+    // Delete (soft)
     @Transactional
     public boolean deleteAdvertisement(UUID id) {
-        Optional<Advertisement> adOpt = repository.findById(id);
-
-        if (adOpt.isPresent()) {
-            Advertisement ad = adOpt.get();
-
-            // Soft delete - меняем статус на DELETED
+        return repository.findById(id).map(ad -> {
             ad.setStatus(AdvertisementStatus.DELETED);
             repository.save(ad);
 
-            // Публикация события после удаления
             eventPublisher.publishEvent(new AdvertisementDeletedEvent(
                     ad.getId(),
                     Instant.now()
             ));
 
+            cacheService.delete(keyById(id));
             return true;
+        }).orElse(false);
+    }
+
+    // Popular
+    public List<AdvertisementResponse> popular(int topN) {
+        Set<Object> ids = cacheService.popular(topN);
+
+        Set<UUID> uuidSet = ids.stream()
+                .filter(Objects::nonNull)
+                .map(o -> UUID.fromString(o.toString()))
+                .collect(Collectors.toSet());
+
+        if (uuidSet.isEmpty()) {
+            return repository.findAll().stream()
+                    .limit(topN)
+                    .map(mapper::toResponse)
+                    .toList();
         }
-        return false;
+
+        return uuidSet.stream()
+                .map(id -> (AdvertisementResponse) cacheService.get(keyById(id)))
+                .filter(Objects::nonNull)
+                .toList();
     }
 }
