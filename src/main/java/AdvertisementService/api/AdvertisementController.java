@@ -63,15 +63,31 @@ public class AdvertisementController {
     }
 
     // Update
-    @PutMapping("/{id}")
-    public ResponseEntity<AdvertisementResponse> updateAdvertisement(
+// Обновление объявления + (опционально) новое фото
+    @PutMapping(
+            value = "/{id}",
+            consumes = {"multipart/form-data"},
+            produces = "application/json"
+    )
+    public ResponseEntity<AdvertisementResponse> updateWithThumbnail(
             @PathVariable UUID id,
-            @RequestBody AdvertisementRequest request
+            @RequestParam String title,
+            @RequestParam String description,
+            @RequestParam Integer price,
+            @RequestParam(value = "file", required = false) MultipartFile file
     ) {
-        Optional<AdvertisementResponse> response = service.updateAdvertisement(id, request);
+        AdvertisementRequest request = new AdvertisementRequest();
+        request.setTitle(title);
+        request.setDescription(description);
+        request.setPrice(price);
+
+        Optional<AdvertisementResponse> response =
+                service.updateAdvertisement(id, request, file);
+
         return response.map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+
 
     // Delete
     @DeleteMapping("/{id}")

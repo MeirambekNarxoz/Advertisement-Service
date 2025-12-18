@@ -88,19 +88,44 @@ public class AdvertisementService {
     }
 
     // Update
+// Обновление полей + замена фото
     @Transactional
-    public Optional<AdvertisementResponse> updateAdvertisement(UUID id, AdvertisementRequest request) {
+    public Optional<AdvertisementResponse> updateAdvertisement(
+            UUID id,
+            AdvertisementRequest request,
+            MultipartFile newThumbnail // может быть null
+    ) {
         return repository.findById(id).map(ad -> {
+            // Обновляем текстовые поля
             ad.setTitle(request.getTitle());
             ad.setDescription(request.getDescription());
             ad.setPrice(request.getPrice());
 
+            // Если пришёл новый файл – меняем картинку
+            if (newThumbnail != null && !newThumbnail.isEmpty()) {
+                // 1. Удаляем старое фото (если было)
+                String oldThumbnailUrl = ad.getThumbnailUrl();
+                if (oldThumbnailUrl != null && !oldThumbnailUrl.isBlank()) {
+                    fileStorageService.deleteByUrl(oldThumbnailUrl);
+                }
+
+                // 2. Загружаем новое фото
+                try {
+                    String newUrl = fileStorageService.uploadThumbnail(id, newThumbnail);
+                    ad.setThumbnailUrl(newUrl);
+                } catch (Exception e) {
+                    throw new RuntimeException("Failed to upload new thumbnail", e);
+                }
+            }
+
             Advertisement updated = repository.save(ad);
 
-            advertisementEventPublisher.publishAdvertisementUpdated(new AdvertisementUpdatedEvent(
-                    updated.getId(),
-                    Instant.now()
-            ));
+            advertisementEventPublisher.publishAdvertisementUpdated(
+                    new AdvertisementUpdatedEvent(
+                            updated.getId(),
+                            Instant.now()
+                    )
+            );
 
             AdvertisementResponse resp = mapper.toResponse(updated);
             cacheService.save(keyById(id), resp);
@@ -109,10 +134,21 @@ public class AdvertisementService {
         });
     }
 
+
     // Upload thumbnail
+    @Transactional
     public Optional<AdvertisementResponse> uploadThumbnail(UUID id, MultipartFile file, UUID currentUserId) {
         return repository.findById(id).map(ad -> {
+            // здесь можно ещё проверить, что currentUserId == ad.getUserId()
+
             try {
+                // 1. Удалить старую картинку, если есть
+                String oldThumbnailUrl = ad.getThumbnailUrl();
+                if (oldThumbnailUrl != null && !oldThumbnailUrl.isBlank()) {
+                    fileStorageService.deleteByUrl(oldThumbnailUrl);
+                }
+
+                // 2. Загрузить новую
                 String url = fileStorageService.uploadThumbnail(id, file);
                 ad.setThumbnailUrl(url);
 
@@ -127,42 +163,30 @@ public class AdvertisementService {
         });
     }
 
+
     // Delete (soft)
     @Transactional
     public boolean deleteAdvertisement(UUID id) {
         return repository.findById(id).map(ad -> {
+            // удалить файл, если есть
+            String thumbnailUrl = ad.getThumbnailUrl();
+            if (thumbnailUrl != null && !thumbnailUrl.isBlank()) {
+                fileStorageService.deleteByUrl(thumbnailUrl);
+                ad.setThumbnailUrl(null);
+            }
+
             ad.setStatus(AdvertisementStatus.DELETED);
             repository.save(ad);
 
-            advertisementEventPublisher.publishAdvertisementDeleted(new AdvertisementDeletedEvent(
-                    ad.getId(),
-                    Instant.now()
-            ));
+            advertisementEventPublisher.publishAdvertisementDeleted(
+                    new AdvertisementDeletedEvent(
+                            ad.getId(),
+                            Instant.now()
+                    )
+            );
 
             cacheService.delete(keyById(id));
             return true;
         }).orElse(false);
-    }
-
-    // Popular
-    public List<AdvertisementResponse> popular(int topN) {
-        Set<Object> ids = cacheService.popular(topN);
-
-        Set<UUID> uuidSet = ids.stream()
-                .filter(Objects::nonNull)
-                .map(o -> UUID.fromString(o.toString()))
-                .collect(Collectors.toSet());
-
-        if (uuidSet.isEmpty()) {
-            return repository.findAll().stream()
-                    .limit(topN)
-                    .map(mapper::toResponse)
-                    .toList();
-        }
-
-        return uuidSet.stream()
-                .map(id -> (AdvertisementResponse) cacheService.get(keyById(id)))
-                .filter(Objects::nonNull)
-                .toList();
     }
 }

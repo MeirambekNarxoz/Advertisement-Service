@@ -2,6 +2,7 @@ package AdvertisementService.service;
 
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -18,7 +19,7 @@ public class FileStorageService {
     @Value("${minio.bucket}")
     private String bucket;
 
-    @Value("${minio.url}")       // http://localhost:9000 или nginx-прокси
+    @Value("${minio.url}") // например: http://localhost:9000
     private String minioUrl;
 
     public String uploadThumbnail(UUID advertisementId, MultipartFile file) throws Exception {
@@ -34,9 +35,29 @@ public class FileStorageService {
 
         minioClient.putObject(args);
 
-        // В БД будешь хранить полный URL, либо относительный путь — на твой выбор
+        // В БД храним полный URL
         return minioUrl + "/" + bucket + "/" + objectName;
-        // или просто return objectName;
+    }
+
+    public void deleteByUrl(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) return;
+
+        try {
+            String objectName = extractObjectName(fileUrl);
+
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(bucket)
+                            .object(objectName)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to delete file from MinIO", e);
+        }
+    }
+
+    private String extractObjectName(String url) {
+        return url.substring((minioUrl + "/" + bucket + "/").length());
     }
 
     private String getExtension(String name) {
